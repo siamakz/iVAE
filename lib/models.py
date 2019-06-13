@@ -6,6 +6,9 @@ from torch import distributions as dist
 from torch import nn
 from torch.nn import functional as F
 
+def weights_init(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight.data)
 
 class Dist:
     def __init__(self):
@@ -172,7 +175,7 @@ class iVAE(nn.Module):
             self.encoder_dist = encoder
 
         if cuda:
-            device = 'cuda:0'
+            device = 'cuda'
         else:
             device = 'cpu'
 
@@ -181,13 +184,20 @@ class iVAE(nn.Module):
         self.logl = MLP(aux_dim, latent_dim, hidden_dim, n_layers, activation=activation, slope=slope)
         # decoder params
         self.f = MLP(latent_dim, data_dim, hidden_dim, n_layers, activation=activation, slope=slope)
-        self.decoder_var = .1 * torch.ones(1).to(device)
+        self.decoder_var = .01 * torch.ones(1).to(device)
         # encoder params
         self.g = MLP(data_dim + aux_dim, latent_dim, hidden_dim, n_layers, activation=activation, slope=slope)
         self.logv = MLP(data_dim + aux_dim, latent_dim, hidden_dim, n_layers, activation=activation, slope=slope)
 
         if cuda:
             self.cuda()
+
+        self.apply(weights_init)
+
+        self.a = 1
+        self.b = 1
+        self.c = 1
+        self.d = 1
 
     def encoder_params(self, x, u):
         xu = torch.cat((x, u), 1)

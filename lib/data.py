@@ -278,6 +278,7 @@ class DataLoaderGPU:
     """
     A custom data loader on GPU.
     """
+
     def __init__(self, path, batch_size, shuffle=True):
         self.device = torch.device('cuda')
         data = np.load(path)
@@ -309,3 +310,49 @@ class DataLoaderGPU:
             idx = self.idx[self.batch_size * b:self.batch_size * (b + 1)]
             yield self.x[idx], self.u[idx], self.s[idx]
 
+
+if __name__ == '__main__':
+    import os
+    import argparse
+
+    parser = argparse.ArgumentParser(description='generate artificial data')
+    parser.add_argument('nps', type=int, nargs='?', default=2000,
+                        help='number of data points per segment')
+    parser.add_argument('ns', type=int, nargs='?', default=40, help='number of segments')
+    parser.add_argument('dl', type=int, nargs='?', default=2,
+                        help='dimension of the latent sources')
+    parser.add_argument('dd', type=int, nargs='?', default=None,
+                        help='dimension of the data')
+    parser.add_argument('-l', '--n-layers', type=int, default=3, dest='nl',
+                        help='number of layers in generating MLP - default: 3    ')
+    parser.add_argument('-s', '--seed', type=int, default=1, dest='s',
+                        help='random seed of generating MLP - default: 1')
+    parser.add_argument('-p', '--prior', default='gauss', dest='p',
+                        help='data distribution of each independent source - default: `gauss`')
+    parser.add_argument('-a', '--activation', default='xtanh', dest='a',
+                        help='activation function of the generating MLP - default: `xtanh`')
+    parser.add_argument('-u', '--uncentered', action='store_true', default=False,
+                        help='Generate uncentered data - default False')
+    parser.add_argument('-n', '--noisy', action='store_true', default=False,
+                        help='Generate noisy data - default False')
+    args = parser.parse_args()
+    if args.dd is None:
+        args.dd = 4 * args.dl
+
+    root = 'data/'
+    if not os.path.exists(root):
+        os.mkdir(root)
+    path_to_dataset = root + 'tcl_' + '_'.join(
+        [str(args.nps), str(args.ns), str(args.dl), str(args.dd), str(args.nl), str(args.s), args.p, args.a])
+    if args.uncentered:
+        path_to_dataset += '_u'
+    if args.noisy:
+        path_to_dataset += '_noisy'
+    path_to_dataset += '.npz'
+
+    if not os.path.exists(path_to_dataset) or args.s is None:
+        kwargs = {"n_per_seg": args.nps, "n_seg": args.ns, "d_sources": args.dl, "d_data": args.dd, "n_layers": args.nl,
+                  "prior": args.p,
+                  "activation": args.a, "seed": args.s, "batch_size": 0, "uncentered": args.uncentered,
+                  "noisy": args.noisy}
+        save_data(path_to_dataset, **kwargs)

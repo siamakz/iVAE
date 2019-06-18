@@ -238,13 +238,13 @@ class iVAE(nn.Module):
         else:
             return (log_px_z + log_pz_u - log_qz_xu).mean(), z
 
-    def anneal(self, N, max_iters, iter):
-        thr = int(max_iters / 1.6)
+    def anneal(self, N, max_iter, it):
+        thr = int(max_iter / 1.6)
         a = 0.5 / self.decoder_var.item()
         self._training_hyperparams[-1] = N
-        self._training_hyperparams[0] = min(2 * a, a + a * iter / thr)
-        self._training_hyperparams[1] = max(1, a * .3 * (1 - iter / thr))
-        self._training_hyperparams[2] = min(1, iter / thr)
-        self._training_hyperparams[3] = max(1, a * .5 * (1 - iter / thr))
-        if iter > thr:
+        self._training_hyperparams[0] = min(2 * a, a + a * it / thr)
+        self._training_hyperparams[1] = max(1, a * .3 * (1 - it / thr))
+        self._training_hyperparams[2] = min(1, it / thr)
+        self._training_hyperparams[3] = max(1, a * .5 * (1 - it / thr))
+        if it > thr:
             self.anneal_params = False

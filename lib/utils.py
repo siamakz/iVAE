@@ -78,7 +78,8 @@ class RunningAverageMeter(object):
 
     def __init__(self, momentum=0.97):
         self.momentum = momentum
-        self.reset()
+        self.val = None
+        self.avg = 0
 
     def reset(self):
         self.val = None
@@ -94,7 +95,10 @@ class RunningAverageMeter(object):
 
 class Averager:
     def __init__(self):
-        self.reset()
+        self.val = 0
+        self.count = 0
+        self.avg = 0
+        self.sum = 0
 
     def reset(self):
         self.val = 0
@@ -115,6 +119,8 @@ class Logger:
         self.reset()
         self.metadata = metadata
         self.exp_id = exp_id
+        self.log_dict = {}
+        self.running_means = {}
 
     def add(self, key):
         self.running_means.update({key: Averager()})

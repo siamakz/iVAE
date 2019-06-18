@@ -83,7 +83,7 @@ def generate_mixing_matrix(d_sources: int, d_data=None, lin_type='uniform', cond
             cond_thresh = cond_threshold
         else:
             cond_list = []
-            for i in range(int(n_iter_4_cond)):
+            for _ in range(int(n_iter_4_cond)):
                 A = np.random.uniform(-1, 1, (d_sources, d_data)).astype(dtype)
                 for i in range(d_data):
                     A[:, i] /= np.sqrt((A[:, i] ** 2).sum())
@@ -113,7 +113,7 @@ def generate_nonstationary_sources(n_per_seg: int, n_seg: int, d: int, prior='la
     @param n_per_seg: number of points per segment
     @param n_seg: number of segments
     @param d: dimension of the sources same as data
-    @param dist: distribution of the sources. can be `lap` for Laplace , `hs` for Hypersecant or `gauss` for Gaussian
+    @param prior: distribution of the sources. can be `lap` for Laplace , `hs` for Hypersecant or `gauss` for Gaussian
     @param var_bounds: optional, upper and lower bounds for the modulation parameter
     @param dtype: data type for data
     @param bool uncentered: True to generate uncentered data

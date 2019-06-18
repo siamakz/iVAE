@@ -195,7 +195,7 @@ class iVAE(nn.Module):
 
         self.apply(weights_init)
 
-        self._training_hyperparams = [1, 1, 1, 1, 1]
+        self._training_hyperparams = [1., 1., 1., 1., 1]
 
     def encoder_params(self, x, u):
         xu = torch.cat((x, u), 1)
@@ -229,8 +229,8 @@ class iVAE(nn.Module):
             M = z.size(0)
             log_qz_tmp = self.encoder_dist.log_pdf(z.view(M, 1, self.latent_dim), g.view(1, M, self.latent_dim),
                                                    v.view(1, M, self.latent_dim), reduce=False)
-            log_qz = torch.logsumexp(log_qz_tmp.sum(dim=-1), dim=1, keepdim=False) - np.log(M * self.N)
-            log_qz_i = (torch.logsumexp(log_qz_tmp, dim=1, keepdim=False) - np.log(M * self.N)).sum(dim=-1)
+            log_qz = torch.logsumexp(log_qz_tmp.sum(dim=-1), dim=1, keepdim=False) - np.log(M * N)
+            log_qz_i = (torch.logsumexp(log_qz_tmp, dim=1, keepdim=False) - np.log(M * N)).sum(dim=-1)
 
             return (a * log_px_z - b * (log_qz_xu - log_qz) - c * (log_qz - log_qz_i) - d * (
                     log_qz_i - log_pz_u)).mean(), z

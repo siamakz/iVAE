@@ -282,6 +282,20 @@ def spearmanr_pt(x, y=None, rowvar=False):
 
 
 def mean_corr_coef_pt(x, y, method='pearson'):
+    """
+    A differentiable pytorch implementation of the mean correlation coefficient metric.
+
+    :param x: torch.Tensor
+    :param y: torch.Tensor
+    :param method: str, optional
+            The method used to compute the correlation coefficients.
+                The options are 'pearson' and 'spearman'
+                'pearson':
+                    use Pearson's correlation coefficient
+                'spearman':
+                    use Spearman's nonparametric rank correlation coefficient
+    :return: float
+    """
     d = x.size(1)
     if method == 'pearson':
         cc = corrcoef_pt(x, y)[:d, d:]
@@ -295,6 +309,20 @@ def mean_corr_coef_pt(x, y, method='pearson'):
 
 
 def mean_corr_coef_np(x, y, method='pearson'):
+    """
+    A numpy implementation of the mean correlation coefficient metric.
+
+    :param x: numpy.ndarray
+    :param y: numpy.ndarray
+    :param method: str, optional
+            The method used to compute the correlation coefficients.
+                The options are 'pearson' and 'spearman'
+                'pearson':
+                    use Pearson's correlation coefficient
+                'spearman':
+                    use Spearman's nonparametric rank correlation coefficient
+    :return: float
+    """
     d = x.shape[1]
     if method == 'pearson':
         cc = np.corrcoef(x, y, rowvar=False)[:d, d:]

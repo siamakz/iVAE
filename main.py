@@ -1,95 +1,133 @@
 import argparse
 import time
 
+import numpy as np
 import torch
+from tensorboardX import SummaryWriter
 from torch import optim
 from torch.utils.data import DataLoader
 
-from lib.data import SyntheticDataset, DataLoaderGPU
+from lib.data import SyntheticDataset, DataLoaderGPU, create_if_not_exist_dataset
 from lib.metrics import mean_corr_coef as mcc
 from lib.models import iVAE
+from lib.utils import get_exp_id, Logger, checkpoint
+
+LOG_FOLDER = 'log/'
+TENSORBOARD_RUN_FOLDER = 'runs/'
+TORCH_CHECKPOINT_FOLDER = 'ckpt/'
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--file', default=None, help='path to data file')
+    parser.add_argument('-x', '--data-args', type=str, default=None, help='string to generate new dataset')
     parser.add_argument('-b', '--batch-size', type=int, default=64, help='batch size (default 64)')
     parser.add_argument('-e', '--epochs', type=int, default=5, help='number of epochs (default 5)')
+    parser.add_argument('-m', '--max-iter', type=int, default=None, help='max iters, overwrites --epochs')
+    parser.add_argument('-g', '--hidden-dim', type=int, default=50, help='hidden dim of the networks (default 50)')
+    parser.add_argument('-d', '--depth', type=int, default=3, help='depth (n_layers) of the networks (default 3)')
+    parser.add_argument('-l', '--lr', type=float, default=1e-3, help='learning rate (default 1e-3)')
+    parser.add_argument('-s', '--seed', type=int, default=1, help='random seed (default 1)')
     parser.add_argument('-c', '--cuda', action='store_true', default=False, help='cuda')
     parser.add_argument('-p', '--preload-gpu', action='store_true', default=False, dest='preload',
                         help='preload data on gpu')
-    parser.add_argument('-l', '--lr', type=float, default=1e-3, help='learning rate (default 1e-3)')
-    parser.add_argument('-s', '--seed', type=int, default=1, help='random seed (default 1)')
+    parser.add_argument('-a', '--anneal', action='store_true', default=False, help='use annealing in learning')
+    parser.add_argument('-n', '--no-log', action='store_true', default=False, help='run without logging')
+    parser.add_argument('-q', '--log-freq', type=int, default=25, help='logging frequency')
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     st = time.time()
-    default_path = 'data/tcl_1000_40_2_4_3_1_gauss_xtanh.npz'
+
     if args.file is None:
-        args.file = default_path
+        args.file = create_if_not_exist_dataset(root='data/', arg_str=args.data_args)
+    metadata = vars(args).copy()
+    del metadata['no_log'], metadata['data_args']
+
     device = torch.device('cuda' if args.cuda else 'cpu')
     print('training on {}'.format(device))
 
+    # load data
     if not args.preload:
-        dset = SyntheticDataset(args.file, args.preload)
+        dset = SyntheticDataset(args.file, 'cpu')
         loader_params = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
         train_loader = DataLoader(dset, shuffle=True, batch_size=args.batch_size, **loader_params)
         data_dim, latent_dim, aux_dim = dset.get_dims()
+        args.N = len(dset)
+        metadata.update(dset.get_metadata())
     else:
         train_loader = DataLoaderGPU(args.file, shuffle=True, batch_size=args.batch_size)
         data_dim, latent_dim, aux_dim = train_loader.get_dims()
+        args.N = train_loader.dataset_len
+        metadata.update(train_loader.get_metadata())
+    if args.max_iter is None:
+        args.max_iter = len(train_loader) * args.epochs
 
-    model = iVAE(latent_dim, data_dim, aux_dim, activation='lrelu', cuda=args.cuda)
+    # define model and optimizer
+    model = iVAE(latent_dim, data_dim, aux_dim, activation='lrelu', device=device, hidden_dim=args.hidden_dim,
+                 anneal=args.anneal)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=0, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1, patience=4, verbose=True)
 
     ste = time.time()
     print('setup time: {}s'.format(ste - st))
 
-    elbo_hist = []
-    perf_hist = []
+    # setup loggers
+    exp_id = get_exp_id(LOG_FOLDER)
+    tensorboard_run_name = TENSORBOARD_RUN_FOLDER + 'exp' + str(exp_id) + '_'.join(
+        map(str, ['', args.batch_size, args.max_iter, args.lr, args.hidden_dim, args.depth, args.anneal]))
+    writer = SummaryWriter(logdir=tensorboard_run_name)
+    logger = Logger(exp_id=exp_id, path=LOG_FOLDER)
+    logger.add('elbo')
+    logger.add('perf')
+    print('Beginning training for exp: {}'.format(exp_id))
 
     # training loop
-    for epoch in range(args.epochs):
-        # elbo_epoch = torch.zeros(1).to(device)
-        elbo_epoch = 0
-
-        # perf_epoch = torch.zeros(1).to(device)
-        perf_epoch = 0
-
+    it = 0
+    model.train()
+    while it < args.max_iter:
         est = time.time()
-        for i, (x, u, z) in enumerate(train_loader):
-            model.train()
+        for _, (x, u, z) in enumerate(train_loader):
+            it += 1
+            model.anneal(args.N, args.max_iter, it)
             optimizer.zero_grad()
-            # transfer to GPU
+
             if args.cuda and not args.preload:
-                x = x.cuda(async=True)
-                u = u.cuda(async=True)
-            # do ELBO gradient and accumulate loss
+                x = x.cuda(device=device, non_blocking=True)
+                u = u.cuda(device=device, non_blocking=True)
+
             elbo, z_est = model.elbo(x, u)
             elbo.mul(-1).backward()
             optimizer.step()
 
-            # elbo_epoch += elbo.detach()
-            elbo_epoch += elbo.item()
+            logger.update('elbo', -elbo.item())
 
-            # perf_epoch += mcc(z, z_est.detach().to(z.device))
-            perf_epoch += mcc(z.cpu().numpy(), z_est.cpu().detach().numpy())
+            perf = mcc(z.cpu().numpy(), z_est.cpu().detach().numpy())
+            logger.update('perf', perf)
 
-        elbo_epoch /= -len(train_loader)
-        # elbo_hist.append(- elbo_epoch.cpu().item() / len(train_loader))
-        elbo_hist.append(elbo_epoch)
+            if it % args.log_freq == 0:
+                logger.log()
+                writer.add_scalar('data/performance', logger.get_last('perf'), it)
+                writer.add_scalar('data/elbo', logger.get_last('elbo'), it)
+                scheduler.step(logger.get_last('elbo'))
 
-        perf_epoch /= len(train_loader)
-        # perf_hist.append(perf_epoch.cpu().item() / len(train_loader))
-        perf_hist.append(perf_epoch)
-
-        scheduler.step(elbo_epoch)
+            if it % int(args.max_iter / 5) == 0 and not args.no_log:
+                checkpoint(TORCH_CHECKPOINT_FOLDER, exp_id, it, model, optimizer,
+                           logger.get_last('elbo'), logger.get_last('perf'))
 
         eet = time.time()
-        print('epoch {} done in: {}s;\tloss: {};\tperf: {}'.format(epoch + 1, eet - est, elbo_epoch, perf_epoch))
+        print('epoch {} done in: {}s;\tloss: {};\tperf: {}'.format(int(it / len(train_loader)) + 1, eet - est,
+                                                                   logger.get_last('elbo'), logger.get_last('perf')))
 
     et = time.time()
     print('training time: {}s'.format(et - ste))
+
+    writer.close()
+    if not args.no_log:
+        logger.add_metadata(**metadata)
+        logger.save_to_json()
+        logger.save_to_npz()
+
     print('total time: {}s'.format(et - st))

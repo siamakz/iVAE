@@ -3,3 +3,7 @@ __pycache__/
 *.swp
 .ipynb_checkpoints/
 data/
+log/
+runs
+*.json
+ckpt/

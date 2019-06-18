@@ -1,4 +1,5 @@
 import math
+import os
 
 import numpy as np
 import scipy
@@ -245,11 +246,8 @@ def save_data(path, *args, **kwargs):
 
 
 class SyntheticDataset(Dataset):
-    def __init__(self, path, cuda=False):
-        if cuda:
-            self.device = 'cuda'
-        else:
-            self.device = 'cpu'
+    def __init__(self, path, device='cpu'):
+        self.device = device
         self.path = path
         data = np.load(path)
         self.data = data
@@ -262,6 +260,7 @@ class SyntheticDataset(Dataset):
         self.latent_dim = self.s.shape[1]
         self.aux_dim = self.u.shape[1]
         self.data_dim = self.x.shape[1]
+        self.nps = int(self.len / self.aux_dim)
         print('data loaded on {}'.format(self.x.device))
 
     def get_dims(self):
@@ -273,6 +272,16 @@ class SyntheticDataset(Dataset):
     def __getitem__(self, index):
         return self.x[index], self.u[index], self.s[index]
 
+    def get_metadata(self):
+        return {'path': self.path,
+                'nps': self.nps,
+                'ns': self.aux_dim,
+                'n': self.len,
+                'latent_dim': self.latent_dim,
+                'data_dim': self.data_dim,
+                'aux_dim': self.aux_dim,
+                }
+
 
 class DataLoaderGPU:
     """
@@ -281,6 +290,7 @@ class DataLoaderGPU:
 
     def __init__(self, path, batch_size, shuffle=True):
         self.device = torch.device('cuda')
+        self.path = path
         data = np.load(path)
         self.data = data
         print('data loaded on {}'.format(self.device))
@@ -294,6 +304,7 @@ class DataLoaderGPU:
         self.batch_size = batch_size
         self.shuffle = shuffle
         self.len = math.ceil(self.dataset_len / self.batch_size)
+        self.nps = int(self.dataset_len / self.aux_dim)
         if self.shuffle:
             self.idx = np.random.permutation(self.dataset_len)
         else:
@@ -310,9 +321,55 @@ class DataLoaderGPU:
             idx = self.idx[self.batch_size * b:self.batch_size * (b + 1)]
             yield self.x[idx], self.u[idx], self.s[idx]
 
+    def get_metadata(self):
+        return {'path': self.path,
+                'nps': self.nps,
+                'ns': self.aux_dim,
+                'n': self.dataset_len,
+                'latent_dim': self.latent_dim,
+                'data_dim': self.data_dim,
+                'aux_dim': self.aux_dim,
+                }
+
+
+def create_if_not_exist_dataset(root='data/', nps=1000, ns=40, dl=2, dd=4, nl=3, s=1, p='gauss', a='xtanh',
+                                uncentered=False, noisy=False, arg_str=None):
+    if arg_str is not None:
+        # overwrites all other arg values
+        # arg_str should be of this form: nps_ns_dl_dd_nl_s_p_a_u_n
+        arg_list = arg_str.split('_')
+        assert len(arg_list) == 10
+        nps, ns, dl, dd, nl = map(int, arg_list[0:5])
+        p, a = arg_list[6:8]
+        if arg_list[5] == 'n':
+            s = None
+        else:
+            s = int(arg_list[5])
+        if arg_list[-2] == 'f':
+            uncentered = False
+        else:
+            uncentered = True
+        if arg_list[-1] == 'f':
+            noisy = False
+        else:
+            noisy = True
+
+    path_to_dataset = root + 'tcl_' + '_'.join(
+        [str(nps), str(ns), str(dl), str(dd), str(nl), str(s), p, a])
+    if uncentered:
+        path_to_dataset += '_u'
+    if noisy:
+        path_to_dataset += '_n'
+    path_to_dataset += '.npz'
+
+    if not os.path.exists(path_to_dataset) or s is None:
+        kwargs = {"n_per_seg": nps, "n_seg": ns, "d_sources": dl, "d_data": dd, "n_layers": nl, "prior": p,
+                  "activation": a, "seed": s, "batch_size": 0, "uncentered": uncentered, "noisy": noisy}
+        save_data(path_to_dataset, **kwargs)
+    return path_to_dataset
+
 
 if __name__ == '__main__':
-    import os
     import argparse
 
     parser = argparse.ArgumentParser(description='generate artificial data')

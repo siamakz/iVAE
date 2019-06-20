@@ -252,7 +252,13 @@ class SyntheticDataset(Dataset):
     def __init__(self, path, device='cpu'):
         self.device = device
         self.path = path
-        data = np.load(path)
+        try:
+            data = np.load(path)
+        except:
+            # error occured because many scripts were attempting to create it at same time.
+            # one solution would be to wait and retry, the other would be to make sure
+            # datasets are all created already.
+            pass
         self.data = data
         self.s = torch.from_numpy(data['s']).to(self.device)
         self.x = torch.from_numpy(data['x']).to(self.device)

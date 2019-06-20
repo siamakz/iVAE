@@ -1,9 +1,17 @@
 #!/bin/bash
 
 mkdir -p slurm_log
+mkdir -p log
+mkdir -p runs
+mkdir -p ckpt
 
+python -c "from lib.cmd_utils import create_dataset_before; create_dataset_before('args_gpu.txt')"
+python -c "from lib.cmd_utils import create_dataset_before; create_dataset_before('args_cpu.txt')"
+
+echo "generating seeded args"
 python -c "from lib.cmd_utils import seedify; seedify('args_gpu.txt')" $1 $2
 python -c "from lib.cmd_utils import seedify; seedify('args_cpu.txt')" $1 $2
 
+echo "running slurm scripts"
 sbatch --array=1-$(wc -l args_gpu_seeded.txt | awk '{ print $1 }') slurm_script_gpu.sbatch
 sbatch --array=1-$(wc -l args_cpu_seeded.txt | awk '{ print $1 }') slurm_script_cpu.sbatch

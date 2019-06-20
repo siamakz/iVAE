@@ -1,5 +1,8 @@
 import json
 import os
+import fcntl
+import errno
+import time
 
 import numpy as np
 import torch
@@ -22,13 +25,32 @@ def make_file(file_name):
 def get_exp_id(log_folder):
     log_folder = make_dir(log_folder)
     helper_id_file = log_folder + '.expid'
-    helper_id_file = make_file(helper_id_file)
+    if not os.path.exists(helper_id_file):
+        with open(helper_id_file, 'w') as f:
+            f.writelines('0')
+    # helper_id_file = make_file(helper_id_file)
     with open(helper_id_file, 'r+') as file:
-        eid = 1
-        for _ in file:
-            eid += 1
-        file.write(str(eid) + '\n')
-    return eid
+        st = time.time()
+        while time.time() - st < 30:
+            try:
+                fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # a = input()
+                break
+            except IOError as e:
+                # raise on unrelated IOErrors
+                if e.errno != errno.EAGAIN:
+                    raise
+                else:
+                    print('sleeping')
+                    time.sleep(0.1)
+        else:
+            raise TimeoutError('Timeout on accessing log helper file {}'.format(helper_id_file))
+        prev_id = int(file.readline())
+        curr_id = prev_id + 1
+
+        file.seek(0)
+        file.writelines(str(curr_id))
+    return curr_id
 
 
 def from_log(args, argv, logpath):

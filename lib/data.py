@@ -241,6 +241,9 @@ def save_data(path, *args, **kwargs):
     Sb, Xb, Ub, m, L = generate_data(*args, **kwargs)
     Sb, Xb, Ub = Sb[0], Xb[0], Ub[0]
     print('Creating dataset {} ...'.format(path))
+    dir_path = '/'.join(path.split('/')[:-1])
+    if not os.path.exists(dir_path):
+        os.makedirs('/'.join(path.split('/')[:-1]))
     np.savez_compressed(path, s=Sb, x=Xb, u=Ub, m=m, L=L)
     print(' ... done')
 

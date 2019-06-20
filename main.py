@@ -36,6 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('-q', '--log-freq', type=int, default=25, help='logging frequency')
     args = parser.parse_args()
 
+    print(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -47,7 +48,7 @@ if __name__ == '__main__':
     del metadata['no_log'], metadata['data_args']
 
     device = torch.device('cuda' if args.cuda else 'cpu')
-    print('training on {}'.format(device))
+    print('training on {}'.format(torch.cuda.get_device_name(device)) if args.cuda else 'cpu' )
 
     # load data
     if not args.preload:

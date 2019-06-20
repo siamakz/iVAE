@@ -1,0 +1,9 @@
+#!/bin/bash
+
+mkdir -p slurm_log
+
+python -c "from lib.cmd_utils import seedify; seedify('args_gpu.txt')" $1 $2
+python -c "from lib.cmd_utils import seedify; seedify('args_cpu.txt')" $1 $2
+
+sbatch --array=1-$(wc -l args_gpu_seeded.txt | awk '{ print $1 }') slurm_script_gpu.sbatch
+sbatch --array=1-$(wc -l args_cpu_seeded.txt | awk '{ print $1 }') slurm_script_cpu.sbatch

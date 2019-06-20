@@ -4,6 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 data/
 log/
-runs
+runs/
 *.json
 ckpt/
+slurm_log/

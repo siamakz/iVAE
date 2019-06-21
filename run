@@ -5,6 +5,10 @@ mkdir -p log
 mkdir -p runs
 mkdir -p ckpt
 
+echo "saving old argument files to history"
+cat args_gpu.txt >> .args_gpu.hist
+cat args_cpu.txt >> .args_cpu.hist
+
 python -c "from lib.cmd_utils import create_dataset_before; create_dataset_before('args_gpu.txt')"
 python -c "from lib.cmd_utils import create_dataset_before; create_dataset_before('args_cpu.txt')"
 

@@ -13,4 +13,4 @@
 source ~/.bashrc
 conda activate deep
 
-python main.py $(sed -n ${SLURM_ARRAY_TASK_ID}p args_cpu_seeded.txt) -s $SLURM_ARRAY_TASK_ID
+python main.py $(sed -n ${SLURM_ARRAY_TASK_ID}p args_cpu_seeded.txt)

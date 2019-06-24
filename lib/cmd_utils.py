@@ -48,3 +48,21 @@ def create_dataset_before(args_file):
             args = parse_main_args(line.split())
             create_if_not_exist_dataset(root='data/', arg_str=args.data_args)
 
+def assign_cluster(args_file):
+    with open(args_file, 'r') as f:
+        fcpu = open(args_file.split('.txt')[0]+'_cpu.txt', 'w')
+        fgpu = open(args_file.split('.txt')[0]+'_gpu.txt', 'w')
+        cc = 0
+        cg = 0
+        for line in f:
+            if '-c' in line.split() or '-cp' in line.split():
+                fgpu.write(line)
+                cg += 1
+            else:
+                fcpu.write(line)
+                cc +=1
+        fcpu.close()
+        fgpu.close()
+        print('Total args to be run on gpu: {}'.format(cg))
+        print('Total args to be run on cpu: {}'.format(cc))
+

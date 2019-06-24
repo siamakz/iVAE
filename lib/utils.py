@@ -50,6 +50,7 @@ def get_exp_id(log_folder):
 
         file.seek(0)
         file.writelines(str(curr_id))
+        fcntl.flock(file, fcntl.LOCK_UN)
     return curr_id
 
 

@@ -138,13 +138,17 @@ class Averager:
 
 class Logger:
     """A logging helper that tracks training loss and metrics."""
-    def __init__(self, exp_id, path='log/', **metadata):
-        self.path = path
+    def __init__(self, logdir='log/', **metadata):
+        self.logdir = make_dir(logdir)
+        exp_id = get_exp_id(logdir)
         self.reset()
         self.metadata = metadata
         self.exp_id = exp_id
         self.log_dict = {}
         self.running_means = {}
+
+    def get_id(self):
+        return self.exp_id
 
     def add(self, key):
         self.running_means.update({key: Averager()})
@@ -171,15 +175,19 @@ class Logger:
 
     def save_to_npz(self, path=None):
         if path is None:
-            data_path = make_dir(self.path + 'data/')
+            data_path = make_dir(self.logdir + 'data/')
             path = data_path + str(self.exp_id) + '.npz'
+        else:
+            if path[-4:] != '.npz':
+                path += '.npz'
         for k, v in self.log_dict.items():
             self.log_dict[k] = np.array(v)
         np.savez_compressed(path, **self.log_dict)
+        print('Log data saved to {}'.format(path))
 
     def save_to_json(self, path=None, method='last'):
         if path is None:
-            path = make_file(self.path + 'log.json')
+            path = make_file(self.logdir + 'log.json')
         with open(path, 'a') as file:
             log = {'id': self.exp_id}
             for k in self.keys():
@@ -192,6 +200,7 @@ class Logger:
             log.update({'metadata': self.metadata})
             json.dump(log, file)
             file.write('\n')
+        print('Log saved to {}'.format(path))
 
     def add_metadata(self, **metadata):
         self.metadata.update(metadata)
@@ -203,4 +212,4 @@ class Logger:
         self.get_last(key)
 
     def keys(self):
-        return self.running_means.keys()
+        return self.log_dict.keys()

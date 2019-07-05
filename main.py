@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from lib.data import SyntheticDataset, DataLoaderGPU, create_if_not_exist_dataset
 from lib.metrics import mean_corr_coef as mcc
 from lib.models import iVAE
-from lib.utils import get_exp_id, Logger, checkpoint
+from lib.utils import Logger, checkpoint
 
 LOG_FOLDER = 'log/'
 TENSORBOARD_RUN_FOLDER = 'runs/'
@@ -82,11 +82,11 @@ if __name__ == '__main__':
     print('setup time: {}s'.format(ste - st))
 
     # setup loggers
-    exp_id = get_exp_id(LOG_FOLDER)
+    logger = Logger(path=LOG_FOLDER)
+    exp_id = logger.get_id()
     tensorboard_run_name = TENSORBOARD_RUN_FOLDER + 'exp' + str(exp_id) + '_'.join(
         map(str, ['', args.batch_size, args.max_iter, args.lr, args.hidden_dim, args.depth, args.anneal]))
     writer = SummaryWriter(logdir=tensorboard_run_name)
-    logger = Logger(exp_id=exp_id, path=LOG_FOLDER)
     logger.add('elbo')
     logger.add('perf')
     print('Beginning training for exp: {}'.format(exp_id))

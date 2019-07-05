@@ -137,6 +137,7 @@ class Averager:
 
 
 class Logger:
+    """A logging helper that tracks training loss and metrics."""
     def __init__(self, exp_id, path='log/', **metadata):
         self.path = path
         self.reset()
@@ -152,7 +153,7 @@ class Logger:
     def update(self, key, val):
         self.running_means[key].update(val)
 
-    def reset_means(self):
+    def _reset_means(self):
         for key in self.keys():
             self.running_means[key].reset()
 
@@ -163,24 +164,31 @@ class Logger:
     def log(self):
         for key in self.keys():
             self.log_dict[key].append(self.running_means[key].avg)
-        self.reset_means()
+        self._reset_means()
 
     def get_last(self, key):
         return self.log_dict[key][-1]
 
-    def save_to_npz(self):
-        data_path = make_dir(self.path + 'data/')
-        path = data_path + str(self.exp_id) + '.npz'
+    def save_to_npz(self, path=None):
+        if path is None:
+            data_path = make_dir(self.path + 'data/')
+            path = data_path + str(self.exp_id) + '.npz'
         for k, v in self.log_dict.items():
             self.log_dict[k] = np.array(v)
         np.savez_compressed(path, **self.log_dict)
 
-    def save_to_json(self):
-        path = make_file(self.path + 'log.json')
+    def save_to_json(self, path=None, method='last'):
+        if path is None:
+            path = make_file(self.path + 'log.json')
         with open(path, 'a') as file:
             log = {'id': self.exp_id}
             for k in self.keys():
-                log.update({k: self.get_last(k)})
+                if method == 'last':
+                    log.update({k: self.get_last(k)})
+                elif method == 'full':
+                    log.update({k: self.log_dict[k]})
+                else:
+                    raise ValueError('Incorrect method {}'.format(method))
             log.update({'metadata': self.metadata})
             json.dump(log, file)
             file.write('\n')
@@ -190,6 +198,9 @@ class Logger:
 
     def __len__(self):
         return len(self.log_dict)
+
+    def __get__(self, key):
+        self.get_last(key)
 
     def keys(self):
         return self.running_means.keys()

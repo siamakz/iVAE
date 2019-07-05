@@ -1,3 +1,13 @@
+"""
+Script for generating piecew-wise stationary data.
+
+Each component of the independent latents is comprised of `ns` segments, and each segment has different parameters.\
+Each segment has `nps` data points 9measurements).
+
+The latent components are then mixed by an MLP into observations (not necessarily of the same dimension.
+It is possible to add noise to the observations
+"""
+
 import math
 import os
 
@@ -154,7 +164,7 @@ def generate_nonstationary_sources(n_per_seg: int, n_seg: int, d: int, prior='la
 
 
 def generate_data(n_per_seg, n_seg, d_sources, d_data=None, n_layers=3, prior='lap', activation='lrelu', batch_size=250,
-                  seed=10, slope=.1, var_bounds=np.array([0, 2]), lin_type='uniform', n_iter_4_cond=1e4,
+                  seed=10, slope=.1, var_bounds=np.array([0.5, 3]), lin_type='uniform', n_iter_4_cond=1e4,
                   dtype=np.float32, uncentered=False, noisy=0):
     """
     Generate artificial data with arbitrary mixing
@@ -194,7 +204,7 @@ def generate_data(n_per_seg, n_seg, d_sources, d_data=None, n_layers=3, prior='l
 
     # non linearity
     if activation == 'lrelu':
-        act_f = lambda x: lrelu(x, slope)
+        act_f = lambda x: lrelu(x, slope).astype(dtype)
     elif activation == 'sigmoid':
         act_f = sigmoid
     elif activation == 'xtanh':
@@ -202,7 +212,7 @@ def generate_data(n_per_seg, n_seg, d_sources, d_data=None, n_layers=3, prior='l
     elif activation == 'none':
         act_f = lambda x: x
     else:
-        raise ValueError('incorrect non linearity')
+        raise ValueError('incorrect non linearity: {}'.format(activation))
 
     # Mixing time!
     assert n_layers > 1  # suppose we always have at least 2 layers. The last layer doesn't have a non-linearity
@@ -220,7 +230,7 @@ def generate_data(n_per_seg, n_seg, d_sources, d_data=None, n_layers=3, prior='l
 
     # add noise:
     if noisy:
-        X += .1 * np.random.randn(*X.shape)
+        X += noisy * np.random.randn(*X.shape)
 
     # always return batches (as a list), even if number of batches is one,
     if not batch_size:
@@ -296,7 +306,6 @@ class DataLoaderGPU:
     """
     A custom data loader on GPU.
     """
-
     def __init__(self, path, batch_size, shuffle=True):
         self.device = torch.device('cuda')
         self.path = path
@@ -343,6 +352,12 @@ class DataLoaderGPU:
 
 def create_if_not_exist_dataset(root='data/', nps=1000, ns=40, dl=2, dd=4, nl=3, s=1, p='gauss', a='xtanh',
                                 uncentered=False, noisy=False, arg_str=None):
+    """
+    Create a dataset if it doesn't exist.
+    This is useful as a setup step when running multiple jobs in parallel, to avoid having many scripts attempting
+    to create the dataset when non-existent.
+    This is called in `cmd_utils.create_dataset_before`
+    """
     if arg_str is not None:
         # overwrites all other arg values
         # arg_str should be of this form: nps_ns_dl_dd_nl_s_p_a_u_n

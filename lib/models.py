@@ -248,3 +248,206 @@ class iVAE(nn.Module):
         self._training_hyperparams[3] = max(1, a * .5 * (1 - it / thr))
         if it > thr:
             self.anneal_params = False
+
+
+# MNIST MODELS
+
+class ConvolutionalVAEforMNIST(nn.Module):
+    def __init__(self, latent_dim):
+        super().__init__()
+
+        self.latent_dim = latent_dim
+        self.encoder = nn.Sequential(
+            # input is mnist image: 1x28x28
+            nn.Conv2d(1, 32, 4, 2, 1),  # 32x14x14
+            nn.BatchNorm2d(32),  # 32x14x14
+            nn.ReLU(inplace=True),  # 32x14x14
+            nn.Conv2d(32, 128, 4, 2, 1),  # 128x7x7
+            nn.BatchNorm2d(128),  # 128x7x7
+            nn.ReLU(inplace=True),  # 128x7x7
+            nn.Conv2d(128, 512, 7, 1, 0),  # 512x1x1
+            nn.BatchNorm2d(512),  # 512x1x1
+            nn.ReLU(inplace=True),  # 512x1x1
+            nn.Conv2d(512, 200, 1, 1, 0),  # 200x1x1
+        )
+        self.fc1 = nn.Linear(200, latent_dim)
+        self.fc2 = nn.Linear(200, latent_dim)
+
+        self.decoder = nn.Sequential(
+            # input: latent_dim x 1 x 1
+            nn.ConvTranspose2d(latent_dim, 512, 1, 1, 0),  # 512x1x1
+            nn.BatchNorm2d(512),  # 512x1x1
+            nn.ReLU(inplace=True),  # 512x1x1
+            nn.ConvTranspose2d(512, 128, 7, 1, 0),  # 128x7x7
+            nn.BatchNorm2d(128),  # 128x7x7
+            nn.ReLU(inplace=True),  # 128x7x7
+            nn.ConvTranspose2d(128, 32, 4, 2, 1),  # 32x14x14
+            nn.BatchNorm2d(32),  # 32x14x14
+            nn.ReLU(inplace=True),  # 32x14x14
+            nn.ConvTranspose2d(32, 1, 4, 2, 1)  # 1x28x28
+        )
+
+    def encode(self, x):
+        h = self.encoder(x.view(-1, 1, 28, 28)).squeeze()
+        return self.fc1(F.relu(h)), self.fc2(F.relu(h))
+
+    def decode(self, z):
+        h = self.decoder(z.view(z.size(0), z.size(1), 1, 1))
+        return torch.sigmoid(h.view(-1, 28 * 28))
+
+    @staticmethod
+    def reparameterize(mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x):
+        mu, logv = self.encode(x)
+        z = self.reparameterize(mu, logv)
+        f = self.decode(z)
+        return f, mu, logv
+
+
+class VAEforMNIST(nn.Module):
+    def __init__(self, latent_dim):
+        super().__init__()
+
+        self.latent_dim = latent_dim
+
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, latent_dim)
+        self.fc22 = nn.Linear(400, latent_dim)
+        self.fc3 = nn.Linear(latent_dim, 400)
+        self.fc4 = nn.Linear(400, 784)
+
+    def encode(self, x):
+        h1 = F.relu(self.fc1(x))
+        return self.fc21(h1), self.fc22(h1)
+
+    @staticmethod
+    def reparameterize(mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def decode(self, z):
+        h3 = F.relu(self.fc3(z))
+        return torch.sigmoid(self.fc4(h3))
+
+    def forward(self, x):
+        mu, logvar = self.encode(x.view(-1, 784))
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar
+
+
+class ConvolutionalIVAEforMNIST(nn.Module):
+    def __init__(self, latent_dim):
+        super().__init__()
+
+        self.latent_dim = latent_dim
+
+        # encoder
+        self.encoder = nn.Sequential(
+            # input is mnist image: 1x28x28
+            nn.Conv2d(1, 32, 4, 2, 1),  # 32x14x14
+            nn.BatchNorm2d(32),  # 32x14x14
+            nn.ReLU(inplace=True),  # 32x14x14
+            nn.Conv2d(32, 128, 4, 2, 1),  # 128x7x7
+            nn.BatchNorm2d(128),  # 128x7x7
+            nn.ReLU(inplace=True),  # 128x7x7
+            nn.Conv2d(128, 512, 7, 1, 0),  # 512x1x1
+            nn.BatchNorm2d(512),  # 512x1x1
+            nn.ReLU(inplace=True),  # 512x1x1
+            nn.Conv2d(512, 200, 1, 1, 0),  # 200x1x1
+        )
+        self.fc1 = nn.Linear(200, latent_dim)
+        self.fc2 = nn.Linear(200, latent_dim)
+
+        # decoder
+        self.decoder = nn.Sequential(
+            # input: latent_dim x 1 x 1
+            nn.ConvTranspose2d(latent_dim, 512, 1, 1, 0),  # 512x1x1
+            nn.BatchNorm2d(512),  # 512x1x1
+            nn.ReLU(inplace=True),  # 512x1x1
+            nn.ConvTranspose2d(512, 128, 7, 1, 0),  # 128x7x7
+            nn.BatchNorm2d(128),  # 128x7x7
+            nn.ReLU(inplace=True),  # 128x7x7
+            nn.ConvTranspose2d(128, 32, 4, 2, 1),  # 32x14x14
+            nn.BatchNorm2d(32),  # 32x14x14
+            nn.ReLU(inplace=True),  # 32x14x14
+            nn.ConvTranspose2d(32, 1, 4, 2, 1)  # 1x28x28
+        )
+
+        # prior
+        self.l1 = nn.Linear(10, 200)
+        self.l21 = nn.Linear(200, latent_dim)
+        self.l22 = nn.Linear(200, latent_dim)
+
+    def encode(self, x):
+        h = self.encoder(x.view(-1, 1, 28, 28)).squeeze()
+        return self.fc1(F.relu(h)), self.fc2(F.relu(h))
+
+    def decode(self, z):
+        h = self.decoder(z.view(z.size(0), z.size(1), 1, 1))
+        return torch.sigmoid(h.view(-1, 28 * 28))
+
+    def prior(self, y):
+        h2 = F.relu(self.l1(y))
+        # h2 = self.l1(y)
+        return self.l21(h2), self.l22(h2)
+
+    @staticmethod
+    def reparameterize(mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x, y):
+        mu, logv = self.encode(x)
+        mup, logl = self.prior(y)
+        z = self.reparameterize(mu, logv)
+        f = self.decode(z)
+        return f, mu, logv, mup, logl
+
+
+class iVAEforMNIST(nn.Module):
+    def __init__(self, latent_dim):
+        super().__init__()
+
+        self.latent_dim = latent_dim
+
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, latent_dim)
+        self.fc22 = nn.Linear(400, latent_dim)
+        self.fc3 = nn.Linear(latent_dim, 400)
+        self.fc4 = nn.Linear(400, 784)
+
+        hidden_dim = 200
+        self.l1 = nn.Linear(10, hidden_dim)
+        self.l21 = nn.Linear(hidden_dim, latent_dim)
+        self.l22 = nn.Linear(hidden_dim, latent_dim)
+
+    def encode(self, x):
+        h1 = F.leaky_relu(self.fc1(x))
+        return self.fc21(h1), self.fc22(h1)
+
+    def prior(self, y):
+        h2 = F.relu(self.l1(y))
+        # h2 = self.l1(y)
+        return self.l21(h2), self.l22(h2)
+
+    def decode(self, z):
+        h3 = F.leaky_relu(self.fc3(z))
+        return torch.sigmoid(self.fc4(h3))
+
+    @staticmethod
+    def reparameterize(mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, x, y):
+        mu, logvar = self.encode(x.view(-1, 784))
+        mup, logl = self.prior(y)
+        z = self.reparameterize(mu, logvar)
+        return self.decode(z), mu, logvar, mup, logl
